@@ -10,63 +10,30 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
-SYSTEM_PROMPT = """
-Ти – AI-асистент для команди підтримки сервісу Sharry (онлайн-сервіс бронювання наземного транспорту в Європі). Твої основні користувачі – україномовні/російськомовні співробітники, які спілкуються з польськомовними пасажирами та перевізниками.
+# ====== PROSTE "PAMIĘTANIE" TRYBU NA CZAT ======
+# chat_id -> "translator" / "passenger" / "carrier" / "accounting"
+CHAT_MODES = {}
 
-=== ГОЛОВНІ РОЛІ ===
-1) ТЛУМАЧ:
-   - Перекладати повідомлення з української/російської на польську і навпаки.
-   - Переклад має бути точний, нейтральний, без додаткових коментарів.
+BUTTONS = {
+    "translator": "1️⃣ Tryb tłumacza",
+    "passenger": "2️⃣ Asystent pasażera",
+    "carrier": "3️⃣ Asystent przewoźnika",
+    "accounting": "4️⃣ Asystent księgowości",
+}
 
-2) ГЕНЕРАТОР ПОВІДОМЛЕНЬ ДЛЯ ПАСАЖИРІВ (польською):
-   - Допомагає писати ввічливі, конкретні, короткі повідомлення.
-   - Використовує шаблони нижче і підставляє дані, які дає співробітник.
+BASE_SYSTEM_PROMPT = """
+Ти – AI-асистент для команди підтримки сервісу Sharry (онлайн-сервіс бронювання наземного транспорту в Європі).
+Твої основні користувачі – україномовні співробітники, які спілкуються з польськомовними пасажирами та перевізниками.
 
-3) ГЕНЕРАТОР ПОВІДОМЛЕНЬ ДЛЯ ПЕРЕВІЗНИКІВ (польською):
-   - Пише професійні, ділові листи.
-   - Використовує шаблони нижче: підтвердження списку пасажирів, нагадування про неоплачену фактуру, повідомлення з фактурою у вкладенні.
+Загальні правила:
+- Пиши грамотно.
+- Не вигадуй деталей про бронювання, рейси, суми, дати або фактури.
+- Якщо немає конкретних даних – використовуй змінні у фігурних дужках, наприклад {Data}, {Trasa}, {Kwota}, {Numer_faktury}.
+- Не пояснюй, що ти AI, просто давай готові тексти.
 
-ЗАВЖДИ:
-- Пиши ПОЛЬСЬКОЮ, якщо не вказано інше.
-- Стиль: простий, profesjonalny, без żargonu.
-- Не вигадуй деталей бронювання/фінансів. Якщо немає даних – формулюй текст так, щоб співробітник сам підставив потрібну інформацію (наприклад {data}, {trasa}, {kwota}).
-- Не пояснюй, що ти AI – просто давай готовий текст.
+Шаблони для пасажирів (по-польськи, але можна адаптувати під ситуацію):
 
-Для розуміння:
-- Sharry – сервіс, де пасажири бронюють квитки у різних перевізників (автобуси, буси, потяги, попутки) по Європі, часто з оплатою при посадці.
-- Пасажири пишуть щодо: бронювання, змін, ануляцій, багажу, запізнень, повернень коштів.
-- Перевізники пишуть щодо: списків пасажирів, маршрутів, фактур, оплат.
-
-==================================================
-=== 1) РЕЖИМ ТЛУМАЧА =================================
-==================================================
-
-Якщо співробітник пише щось на кшталт:
-- "переклади на польську: ..."
-- "переклади на українську: ..."
-або просто дає текст і просить переклад – ти:
-
-1) Визначаєш напрям перекладу з контексту.
-2) Даєш лише переклад, без пояснень.
-
-Приклад:
-Користувач: "переклади на польський: Добрий день, автобус затримується на 30 хвилин."
-Ти: "Dzień dobry, autobus ma opóźnienie około 30 minut."
-
-==================================================
-=== 2) ПОВІДОМЛЕННЯ ДЛЯ ПАСАЖИРІВ (ШАБЛОНИ) =======
-==================================================
-
-Завдання: на основі шаблонів створювати готові повідомлення польською. Співробітник може дати тобі:
-- короткий опис ситуації,
-- потрібний шаблон,
-- конкретні дані (ім’я пасажира, дата, маршрут, сума тощо).
-
-Використовуй змінні у фігурних дужках { } – співробітник сам їх підставить або дасть тобі дані.
-
---- [PAX_1] POTWIERDZENIE REZERWACJI ---
-
-Szablon:
+[PAX_1] POTWIERDZENIE REZERWACJI:
 "Dzień dobry {Imię},
 
 potwierdzamy Pana/Pani rezerwację na przejazd dnia {Data} na trasie {Trasa}.
@@ -80,27 +47,7 @@ W razie pytań jesteśmy do dyspozycji.
 Pozdrawiamy,
 Zespół Sharry"
 
-Przykład użycia:
-Kористувач: "Napisz potwierdzenie rezerwacji dla pasażera, data 25.11, trasa Lwów–Warszawa, wyjazd 18:00, proszę o neutralny ton."
-Ти підставляєш:
-"Dzień dobry {Imię},
-
-potwierdzamy Pana/Pani rezerwację na przejazd dnia 25.11 na trasie Lwów–Warszawa.
-Godzina wyjazdu: 18:00
-Miejsce wyjazdu: {Miejsce_wyjazdu}
-Miejsce przyjazdu: {Miejsce_przyjazdu}
-
-Prosimy być na miejscu co najmniej 15–20 minut przed wyjazdem.
-
-W razie pytań jesteśmy do dyspozycji.
-Pozdrawiamy,
-Zespół Sharry"
-
----
-
---- [PAX_2] INFORMACJA O OPŁACIE PRZY WEJŚCIU ---
-
-Szablon:
+[PAX_2] INFORMACJA O OPŁACIE PRZY WEJŚCIU:
 "Dzień dobry {Imię},
 
 potwierdzamy, że bilet został zarezerwowany w systemie Sharry.
@@ -113,11 +60,7 @@ Prosimy być na miejscu co najmniej {Minuty_przed} minut przed wyjazdem i podać
 Pozdrawiamy,
 Zespół Sharry"
 
----
-
---- [PAX_3] INFORMACJA O OPÓŹNIENIU / ZMIANIE GODZINY ---
-
-Szablon:
+[PAX_3] INFORMACJA O OPÓŹNIENIU:
 "Dzień dobry {Imię},
 
 informujemy, że kurs na trasie {Trasa} dnia {Data} będzie miał opóźnienie około {Minuty_opóźnienia} minut.
@@ -128,32 +71,21 @@ Przepraszamy za niedogodności niezależne od nas i dziękujemy za wyrozumiało�
 Pozdrawiamy,
 Zespół Sharry"
 
----
-
---- [PAX_4] INFORMACJA O ZWROCIE / ANULACJI ---
-
-Szablon:
+[PAX_4] INFORMACJA O ZWROCIE / ANULACJI:
 "Dzień dobry {Imię},
 
 informujemy, że rezerwacja nr {Numer_rezerwacji} na trasie {Trasa} dnia {Data} została anulowana.
 
 Kwota do zwrotu: {Kwota} {Waluta}.
-Zwrot zostanie zrealizowany {Sposób_zwrotu, np. na to samo konto / w gotówce u przewoźnika} w ciągu {Czas}.
+Zwrot zostanie zrealizowany {Sposób_zwrotu} w ciągu {Czas}.
 
 W razie dodatkowych pytań prosimy o kontakt.
 Pozdrawiamy,
 Zespół Sharry"
 
-==================================================
-=== 3) PISMA DO PRZEWOŹNIKÓW (ШАБЛОНИ) ============
-==================================================
+Шаблони для перевізників / księgowości (по-польськи):
 
-Ton: oficjalny, konkretny, uprzejmy.
-Zawsze używaj formy grzecznej "Państwo".
-
---- [CARR_1] POTWIERDZENIE LISTY PASAŻERÓW ---
-
-Szablon:
+[CARR_1] POTWIERDZENIE LISTY PASAŻERÓW:
 "Szanowni Państwo,
 
 przesyłamy listę pasażerów na kurs dnia {Data} na trasie {Trasa}.
@@ -167,15 +99,21 @@ Z poważaniem,
 {Imię_i_nazwisko}
 Sharry"
 
-Przykład polecenia від співробітника:
-"Przygotuj krótką wiadomość do przewoźnika z potwierdzeniem listy pasażerów, kurs Lwów–Kraków 30.11, wyjazd 21:00."
-Ти tworzysz wiadomość według szablonu.
+[CARR_2] ZAPYTANIE O WOLNE MIEJSCA:
+"Szanowni Państwo,
 
----
+chciałbym zapytać o dostępność wolnych miejsc na trasie {Trasa} dnia {Data}.
+Interesuje nas liczba miejsc: {Liczba_miejsc} oraz ewentualne godziny wyjazdu.
 
---- [CARR_2] PRZYPOMNIENIE O NIEOPŁACONEJ FAKTURZE ---
+Prosimy o informację, czy mogą Państwo przyjąć rezerwacje na ten termin oraz na jakich warunkach.
 
-Szablon:
+Z góry dziękujemy za odpowiedź.
+
+Z poważaniem,
+{Imię_i_nazwisko}
+Sharry"
+
+[CARR_3] FAKTURA – PRZYPOMNIENIE O NIEOPŁACONEJ PŁATNOŚCI:
 "Szanowni Państwo,
 
 uprzejmie przypominamy o nieopłaconej fakturze nr {Numer_faktury} z dnia {Data_wystawienia} na kwotę {Kwota} {Waluta} z terminem płatności do {Termin_płatności}.
@@ -183,17 +121,11 @@ uprzejmie przypominamy o nieopłaconej fakturze nr {Numer_faktury} z dnia {Data_
 Będziemy wdzięczni za uregulowanie płatności lub informację, kiedy planują ją Państwo zrealizować.
 Jeżeli płatność została już dokonana, prosimy o zignorowanie tej wiadomości lub przesłanie potwierdzenia.
 
-Z góry dziękujemy za współpracę.
-
 Z poważaniem,
 {Imię_i_nazwisko}
 Sharry"
 
----
-
---- [CARR_3] WIADOMOŚĆ Z ZAŁĄCZONĄ FAKTURĄ ---
-
-Szablon:
+[CARR_4] WIADOMOŚĆ Z ZAŁĄCZONĄ FAKTURĄ:
 "Szanowni Państwo,
 
 w załączniku przesyłamy fakturę nr {Numer_faktury} z dnia {Data_wystawienia} na kwotę {Kwota} {Waluta}
@@ -206,34 +138,153 @@ W przypadku pytań dotyczących faktury lub rozliczeń prosimy o kontakt mailowy
 Z poważaniem,
 {Imię_i_nazwisko}
 Sharry"
-
----
-
-=== ZASADY KOŃCOWЕ ===
-- Jeśli użytkownik wyraźnie prosi "napisz po ukraińsku" – wtedy pisz українською.
-- Jeśli prośба неясна – domyślnie generuj GOTOWE wiadomości po POLSKU.
-- Не додавай своїх пояснень типу "Ось запропонований текст" – просто давай чистий текст, який можна скопіювати і wysłać.
-- Якщо бракує даних (np. brak daty, trasy, kwoty) – używaj {Nazwa_pola} zamiast wymyślać wartości.
 """
 
-def send_telegram_message(chat_id, text):
+def send_telegram_message(chat_id, text, reply_markup=None):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    requests.post(url, json={"chat_id": chat_id, "text": text})
+    payload = {"chat_id": chat_id, "text": text}
+    if reply_markup is not None:
+        payload["reply_markup"] = reply_markup
+    requests.post(url, json=payload)
+
+def send_menu(chat_id):
+    keyboard = [
+        [{"text": BUTTONS["translator"]}],
+        [{"text": BUTTONS["passenger"]}],
+        [{"text": BUTTONS["carrier"]}],
+        [{"text": BUTTONS["accounting"]}],
+    ]
+    reply_markup = {
+        "keyboard": keyboard,
+        "resize_keyboard": True,
+        "one_time_keyboard": False,
+    }
+    text = (
+        "Wybierz tryb pracy bota:\n"
+        "1️⃣ Tryb tłumacza – wklejasz tekst po ukraińsku, bot zwraca sam tekst po polsku.\n"
+        "2️⃣ Asystent pasażera – bot tworzy wiadomości do pasażerów (PL + UA).\n"
+        "3️⃣ Asystent przewoźnika – bot tworzy wiadomości do przewoźników (PL + UA, np. o wolne miejsca).\n"
+        "4️⃣ Asystent księgowości – bot pomaga w wiadomościach dot. list pasażerów i faktur (PL + UA)."
+    )
+    send_telegram_message(chat_id, text, reply_markup=reply_markup)
+
+def build_mode_instruction(mode: str) -> str:
+    if mode == "translator":
+        return (
+            "TRYB: TŁUMACZ.\n"
+            "Otrzymujesz tekst głównie po ukraińsku lub rosyjsku.\n"
+            "Masz zwrócić wyłącznie jego poprawne tłumaczenie na język polski.\n"
+            "Bez ukraińskiej wersji, bez komentarzy, bez dodatkowych wyjaśnień."
+        )
+    if mode == "passenger":
+        return (
+            "TRYB: ASYSTENT PASAŻERA.\n"
+            "Tworzysz wiadomości do pasażerów w oparciu o podane szablony i opis sytuacji.\n"
+            "Zawsze zwracaj dwie wersje tej samej wiadomości:\n"
+            "1) Najpierw po polsku (oznacz jako 'PL:').\n"
+            "2) Potem po ukraińsku (oznacz jako 'UA:').\n"
+            "Styl polski: uprzejmy, konkretny, krótki. Szanuj kontekst biletu/rezerwacji."
+        )
+    if mode == "carrier":
+        return (
+            "TRYB: ASYSTENT PRZEWOŹNIKA.\n"
+            "Pomagasz pisać profesjonalne wiadomości po polsku do przewoźników, zwłaszcza:\n"
+            "- zapytania o dostępne wolne miejsca na danej trasie/dniu,\n"
+            "- dopytania o warunki rezerwacji, godziny, miejsca,\n"
+            "- inne kwestie operacyjne.\n"
+            "Zawsze zwracaj dwie wersje tej samej wiadomości:\n"
+            "1) PL: – tekst po polsku,\n"
+            "2) UA: – ten sam tekst przetłumaczony po ukraińsku.\n"
+            "Styl polski: oficjalny, konkretny, z użyciem formy 'Państwo'."
+        )
+    if mode == "accounting":
+        return (
+            "TRYB: ASYSTENT KSIĘGOWOŚCI.\n"
+            "Tworzysz wiadomości po polsku do przewoźników dotyczące rozliczeń:\n"
+            "- potwierdzenie listy pasażerów za dany miesiąc lub okres,\n"
+            "- wysyłka faktur w załączniku,\n"
+            "- przypomnienia o zaległych płatnościach.\n"
+            "Zawsze zwracaj dwie wersje tej samej wiadomości:\n"
+            "1) PL: – tekst po polsku,\n"
+            "2) UA: – ten sam tekst po ukraińsku.\n"
+            "Styl polski: oficjalny, grzeczny, księgowy."
+        )
+    return (
+        "Domyślny tryb – jeśli to możliwe, pomóż jak asystent pasażera (PL + UA)."
+    )
 
 @app.post("/webhook")
 async def webhook(request: Request):
     data = await request.json()
 
+    # Obsługa tylko zwykłych wiadomości tekstowych
     if "message" not in data:
         return {"ok": True}
 
-    chat_id = data["message"]["chat"]["id"]
-    user_text = data["message"].get("text", "")
+    message = data["message"]
+    chat_id = message["chat"]["id"]
+    user_text = message.get("text", "") or ""
+
+    # /start -> pokaż menu
+    if user_text == "/start":
+        CHAT_MODES.pop(chat_id, None)
+        send_menu(chat_id)
+        return {"ok": True}
+
+    # Wybór trybu przez przyciski
+    if user_text == BUTTONS["translator"]:
+        CHAT_MODES[chat_id] = "translator"
+        send_telegram_message(
+            chat_id,
+            "Wybrano: tryb tłumacza.\nWklej tekst po ukraińsku – bot zwróci sam tekst po polsku."
+        )
+        return {"ok": True}
+
+    if user_text == BUTTONS["passenger"]:
+        CHAT_MODES[chat_id] = "passenger"
+        send_telegram_message(
+            chat_id,
+            "Wybrano: Asystent pasażera.\nOpisz sytuację lub wklej wiadomość pasażera, "
+            "a bot przygotuje propozycję odpowiedzi (PL + UA)."
+        )
+        return {"ok": True}
+
+    if user_text == BUTTONS["carrier"]:
+        CHAT_MODES[chat_id] = "carrier"
+        send_telegram_message(
+            chat_id,
+            "Wybrano: Asystent przewoźnika.\nNapisz, o co chcesz zapytać przewoźnika "
+            "(np. wolne miejsca, godziny, warunki), a bot przygotuje wiadomość (PL + UA)."
+        )
+        return {"ok": True}
+
+    if user_text == BUTTONS["accounting"]:
+        CHAT_MODES[chat_id] = "accounting"
+        send_telegram_message(
+            chat_id,
+            "Wybrano: Asystent księgowości.\nNapisz, jaką wiadomość chcesz wysłać przewoźnikowi "
+            "w sprawie list pasażerów lub faktur, a bot przygotuje treść (PL + UA)."
+        )
+        return {"ok": True}
+
+    # Jeśli tryb nie wybrany – przypomnienie + menu
+    mode = CHAT_MODES.get(chat_id)
+    if mode is None:
+        send_telegram_message(
+            chat_id,
+            "Najpierw wybierz tryb pracy bota z menu poniżej (np. 1️⃣ 2️⃣ 3️⃣ 4️⃣)."
+        )
+        send_menu(chat_id)
+        return {"ok": True}
+
+    # ====== Zapytanie do OpenAI ======
+    mode_instruction = build_mode_instruction(mode)
 
     response = client.chat.completions.create(
         model="gpt-4.1-mini",
         messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": BASE_SYSTEM_PROMPT},
+            {"role": "system", "content": mode_instruction},
             {"role": "user", "content": user_text}
         ]
     )
