@@ -376,7 +376,7 @@ Z poważaniem,
 Sharry"
 
 3) Нагадування про неоплачену фактуру (можна адаптувати):
-"Szanowni Państwo,
+"Dzień dobry,
 
 uprzejmie przypominamy o nieopłaconej fakturze nr {Numer_faktury} z dnia {Data_wystawienia} na kwotę {Kwota} {Waluta} z terminem płatności do {Termin_płatności}.
 
@@ -386,8 +386,7 @@ Jeżeli płatność została już dokonana, prosimy o zignorowanie tej wiadomoś
 Z góry dziękujemy za współpracę.
 
 Z poważaniem,
-{Imię_i_nazwisko}
-Sharry"
+{podpis}
 
 ПРІОРИТЕТ ШАБЛОНІВ:
 - Якщо лист стосується:
